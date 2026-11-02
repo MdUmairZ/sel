@@ -1,48 +1,53 @@
-# Step 1: Use an official Maven image with JDK 17 to build and compile the app
-FROM maven:3.8.6-eclipse-temurin-17 AS builder
+# Step 1: Use an official Maven image with JDK 17 to build and bundle the app
+FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
-# Copy the build configuration and source code
 COPY pom.xml .
 COPY src ./src
 
-# Pre-fetch dependencies and compile test classes
 RUN mvn dependency:go-offline -B
 RUN mvn test-compile
 
-# Step 2: Runtime image equipped with Java, Maven, and Google Chrome
-FROM maven:3.8.6-eclipse-temurin-17
+# Step 2: Use a slim runtime image containing Java 17 and Chrome
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# Install dependencies and Google Chrome Stable
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     wget \
     gnupg \
     curl \
     unzip \
     libglib2.0-0 \
     libnss3 \
-    libgconf-2-4 \
     libfontconfig1 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update && apt-get install -y google-chrome-stable \
+    chromium \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy compiled classes and source code from the builder stage
-COPY --from=builder /app /app
+COPY --from=build /app /app
+ENV CHROME_BIN=/usr/bin/chromium
 
-# Set environment variables for Chrome binaries
-ENV CHROME_BIN=/usr/bin/google-chrome-stable
+CMD ["mvn", "test"]
+# Step 2: Use a slim runtime image containing Java 17 and Chrome for execution headless environment
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+
+# Install stable Chrome dependencies required for headless Selenium runs
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    curl \
+    unzip \
+    libglib2.0-0 \
+    libnss3 \
+    libfontconfig1 \
+    chromium \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy compiled classes and dependencies from the build stage
+COPY --from=build /app /app
+
+# Set environment variable to target the internal Chromium binary if needed
+ENV CHROME_BIN=/usr/bin/chromium
 
 # Default command to run the TestNG tests inside the container
 CMD ["mvn", "test"]
