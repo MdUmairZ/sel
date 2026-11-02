@@ -10,11 +10,11 @@ COPY src ./src
 RUN mvn dependency:go-offline -B
 RUN mvn test-compile
 
-# Step 2: Runtime image equipped with Java, Maven, Chrome, and ChromeDriver
+# Step 2: Runtime image equipped with Java, Maven, and Google Chrome
 FROM maven:3.8.6-eclipse-temurin-17
 WORKDIR /app
 
-# Install stable Chrome and ChromeDriver dependencies required for headless Selenium runs
+# Install dependencies and Google Chrome Stable
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -24,16 +24,25 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     libgconf-2-4 \
     libfontconfig1 \
-    chromium \
-    chromium-chromedriver \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy compiled classes and source code from the builder stage
 COPY --from=builder /app /app
 
-# Set environment variables for Chromium binaries
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+# Set environment variables for Chrome binaries
+ENV CHROME_BIN=/usr/bin/google-chrome-stable
 
 # Default command to run the TestNG tests inside the container
 CMD ["mvn", "test"]
