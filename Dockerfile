@@ -1,4 +1,4 @@
-# Step 1: Use an official Maven image with JDK 17 to build and bundle the app
+# Step 1: Use an official Maven image with JDK 17 to build and compile the app
 FROM maven:3.8.6-eclipse-temurin-17 AS builder
 WORKDIR /app
 
@@ -6,17 +6,15 @@ WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 
-# Pre-fetch dependencies to speed up subsequent image builds
+# Pre-fetch dependencies and compile test classes
 RUN mvn dependency:go-offline -B
-
-# Package the application tests without executing them during image compilation
 RUN mvn test-compile
 
-# Step 2: Use a slim runtime image containing Chrome for execution headless environment
-FROM eclipse-temurin:17-jdk
+# Step 2: Runtime image equipped with Java, Maven, Chrome, and ChromeDriver
+FROM maven:3.8.6-eclipse-temurin-17
 WORKDIR /app
 
-# Install stable Chrome dependencies required for headless Selenium runs
+# Install stable Chrome and ChromeDriver dependencies required for headless Selenium runs
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -27,13 +25,15 @@ RUN apt-get update && apt-get install -y \
     libgconf-2-4 \
     libfontconfig1 \
     chromium \
+    chromium-chromedriver \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy compiled classes and dependencies from the build stage
-COPY --from=build /app /app
+# Copy compiled classes and source code from the builder stage
+COPY --from=builder /app /app
 
-# Set environment variable to target the internal Chromium binary if needed
+# Set environment variables for Chromium binaries
 ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 # Default command to run the TestNG tests inside the container
 CMD ["mvn", "test"]
